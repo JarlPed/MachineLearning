@@ -14,9 +14,6 @@ import numpy as np
 
 
 
-dtype = torch.float
-device = torch.device("cpu")
-
 
 
 def PIDu (err, K, n_int): return K[0]*err[0]+K[1]*scipy.integrate.simps(err[-n_int:]) +K[2]*(err[-1]-err[-2])
@@ -28,15 +25,16 @@ def PIDu (err, K, n_int): return K[0]*err[0]+K[1]*scipy.integrate.simps(err[-n_i
 env = gym.make('CartPole-v1')
 env.spec
 
-# Initial Control parameters and weights
-
-#K = [[1.0, 0.0, 1.0],[1.0, 0.0, 1.0],[1.0, 0.0, 1.0],[1.0, 0.0, 1.0]]
+# Initial Control parameters and weights, found by manual trials
+K = [[1.0, 0.1, 1.0],[1.0, 0.1, 1.0],[1.0, 0.1, 1.0],[1.0, 0.1, 1.0]]
 weights = [1.0, 1.0, 1.0, 1.0]
 n_int = 200
- 
-# Solution a semi PD controller
-K = [[1.0, 0.1, 1.0],[1.0, 0.1, 1.0],[1.0, 0.1, 1.0],[1.0, 0.1, 1.0]]
 
+
+# Solution vectors: 
+#K = [[ 0.99915848,  0.1198883 ,  1.00037905], [ 1.00084179,  0.07053706,  1.00212349], [ 0.99977168,  0.02555626,  1.00650884], [ 1.00070966,  0.16104167,  1.00091711]  ]
+#weights = [ 0.99959013,  0.99860294,  0.99733292,  1.00613926]
+#n_int = 200
 
 nnInput = 3*4+4+1
 
@@ -52,14 +50,16 @@ inputVec.append(n_int)
 
 
 
-def TestPIDPoleCart(matrix, batch_size):
+def TestPIDPoleCart(vector, batch_size):
     
-    
-    weights = matrix[0:4]
-    n_int = int(matrix[-1])
-    K = []
-    for i in range(len(weights)):
-        K.append(matrix[4+3*i:4+3*(i+1)])
+    try:
+        weights = vector[0:4]
+        n_int = int(vector[-1])
+        K = []
+        for i in range(len(weights)):
+            K.append(vector[4+3*i:4+3*(i+1)])
+    except:
+        raise ValueError('Vector have invalid dimentions,', np.size(vector)    ', should be [1, 17]')
         
     reward_array = []    
     
@@ -163,22 +163,72 @@ def NewtonRaphsonMinimizer(vecInit, pertub, batch_size, maxIter, lr):
         
         
         if verboseBool:
-            print "Iteration:",iteration+1 ,"\tAverage reward:", f, (f_std)
+            print "Iteration:",iteration+1 ,"\tAverage reward:", f, "(", f_std, ")"
             #print "Vector =", vec
             #print "Gradient vector =", gradf
-        
-        
-        
+
     # endfor    
-    return vec    
+    return vec, iteration
+
+def BFGSMinimizer(vecInit , pertub, batch_size, maxIter, lineSearchMaxIter, linesearchConv , Binit = np.identity(17)):
+    # Broyden–Fletcher–Goldfarb–Shanno algorithm
+    vec = vecInit
+    B_inv = 1/Binit
+    
+    # Get initial gradient
+    gradf, gradf_std = PIDGradVector(vec, pertub, batch_size)
+    gradf = - gradf
+    
+    # Begin iteration loop:
+    for iter in range(maxIter):
+        # Direction vector
+        p_k = - np.dot(B_inv, grad)
+        # Line search: Find minimum such that a_k = min ( f(x_k + a * p_k) ), a>0
+        a_k = 1 # implement a line search algorithm here
+        
+        p_i = 0
+        g_i = gradf
+        d_i = -gradf
+        
+        for i in range (lineSearchMaxIter):
+            a_i = np.linalg.norm(g_i)**2/(np.transpose(d_i) )
+            p_i = p_i + a_i*d_i
+            #g_i1 = g_i + a_i*B_k * d_i
+            beta_i = np.linalg.norm(g_i1)**2 / np.linalg.norm(g_i)**2
+            d_i = -g_i + beta_i*d_i
+        p_k = p_i
+        
+        s_k = a_k*p_k
+        vec += s_k # update vector
+        
+        
+        gradf_k1, gradf_k1_std = PIDGradVector(vec, pertub, batch_size)
+        gradf_k1 = -gradf_k1;
+        
+        y_k = np.array( gradf_k1 - gradf )
+        
+        B_inv = (np.identity(len(vec)) - s_k*np.transpose(y_k) / (np.transpose(y_k)*s_k) ) *B_inv * (np.identity(len(vec)) - y_k*np.transpose(s_k) / (np.transpose(y_k)*s_k) ) + s_k*np.transpose(s_k) / (np.transpose(y_k)*s_k)
+        
+        
+        
+        
+        gradf = grad_k1
+    
+    
+    
+    return vec
+
+        
+        
+   
     
 if __name__ == "__main__":
 
     verboseBool = True
     renderBool= False
-    vec = NewtonRaphsonMinimizer(inputVec, 0.05, 100, 10, 0.002)
+    vec, iteration  = NewtonRaphsonMinimizer(inputVec, 0.1, 100, 30, 0.0005)
     renderBool = True
-    TestPIDPoleCart(vec, 10)
+    TestPIDPoleCart(inputVec, 40)
     
 
     
