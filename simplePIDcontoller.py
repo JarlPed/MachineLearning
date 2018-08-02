@@ -59,7 +59,7 @@ def TestPIDPoleCart(vector, batch_size):
         for i in range(len(weights)):
             K.append(vector[4+3*i:4+3*(i+1)])
     except:
-        raise ValueError('Vector have invalid dimentions,', np.size(vector)    ', should be [1, 17]')
+        raise ValueError('Vector have invalid dimentions,', np.size(vector) ,   ', should be [1, 17]')
         
     reward_array = []    
     
